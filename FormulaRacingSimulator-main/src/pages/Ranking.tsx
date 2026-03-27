@@ -1,9 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Medal, Clock, Users, Download } from 'lucide-react';
-import { LapRecord } from '../types';
-import { getRankedLaps } from '../utils/storage';
-import { formatTime, getEnvironmentalImpact } from '../utils/calculations';
+// Usamos "as UsersIcon" para não dar conflito com o tipo "User"
+import { 
+  ArrowLeft, 
+  Medal, 
+  Clock, 
+  Trophy, 
+  Users as UsersIcon, 
+  Activity,
+} from 'lucide-react';
+import { LapRecord, User } from '../types';
+import { getRankedLaps, getGlobalRanking } from '../utils/storage';
+import { formatTime } from '../utils/calculations';
 import {
   LineChart, Line,
   BarChart, Bar,
@@ -13,12 +21,13 @@ import {
 
 const Ranking: React.FC = () => {
   const [rankedLaps, setRankedLaps] = useState<LapRecord[]>([]);
+  const [globalUsers, setGlobalUsers] = useState<User[]>([]);
   const [chartType, setChartType] = useState<'line' | 'bar' | 'area'>('line');
   const navigate = useNavigate();
 
   useEffect(() => {
-    const laps = getRankedLaps();
-    setRankedLaps(laps);
+    setRankedLaps(getRankedLaps());
+    setGlobalUsers(getGlobalRanking());
   }, []);
 
   const handleBack = () => {
@@ -30,6 +39,13 @@ const Ranking: React.FC = () => {
     }
   };
 
+  // Prepara dados para o gráfico (últimas 10 voltas para não poluir o visual)
+  const chartData = rankedLaps.slice(0, 10).map((lap, index) => ({
+    name: `V${rankedLaps.length - index}`,
+    tempo: lap.time,
+    piloto: lap.name
+  })).reverse();
+
   const getMedalColor = (index: number): string => {
     switch (index) {
       case 0: return 'text-yellow-400';
@@ -39,207 +55,158 @@ const Ranking: React.FC = () => {
     }
   };
 
-  const downloadJSON = () => {
-    try {
-      const dataStr = JSON.stringify(rankedLaps, null, 2);
-      const blob = new Blob([dataStr], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'corridas.json';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Erro ao exportar dados:', error);
-    }
-  };
-
-  const chartData = rankedLaps.map((lap, index) => ({
-    name: lap.name,
-    tempo: lap.time,
-    posicao: index + 1
-  }));
-
-  const totalPoints = rankedLaps.reduce((total, lap) => total + (lap.points ?? 0), 0);
-
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-shadow">Ranking</h1>
-        <div className="flex gap-4">
-          <button
-            onClick={downloadJSON}
-            className="racing-btn-green flex items-center justify-center gap-2"
-          >
-            <Download size={18} />
-            <span>JSON</span>
+    <div className="max-w-6xl mx-auto pb-10">
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-4">
+          <button onClick={handleBack} className="p-2 hover:bg-gray-800 rounded-full transition-colors text-white">
+            <ArrowLeft size={24} />
           </button>
-
-          <button
-            onClick={handleBack}
-            className="racing-btn-dark flex items-center justify-center gap-2"
-          >
-            <ArrowLeft size={18} />
-            <span>Voltar</span>
-          </button>
+          <h1 className="text-4xl font-bold text-shadow text-white">Hall da Fama</h1>
         </div>
       </div>
 
-      {rankedLaps.length > 0 ? (
-        <div className="space-y-6">
-          <div className="racing-card card-f1">
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <Medal className="text-yellow-400" size={20} />
-              <span>Melhores Tempos</span>
+      {/* SEÇÃO DE GRÁFICOS RESTAURADA */}
+      {rankedLaps.length > 0 && (
+        <div className="racing-card card-f1 mb-8 bg-racing-gray border-l-4 border-f1-red p-6 rounded-xl">
+          <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+            <h2 className="text-xl font-bold flex items-center gap-2 text-white">
+              <Activity className="text-f1-red" size={20} /> Telemetria de Desempenho
             </h2>
-
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-racing-gray">
-                    <th className="py-2 px-4 text-left">#</th>
-                    <th className="py-2 px-4 text-left">Piloto</th>
-                    <th className="py-2 px-4 text-right">Tempo</th>
-                    <th className="py-2 px-4 text-right hidden sm:table-cell">Gasolina Poupada</th>
-                    <th className="py-2 px-4 text-right">Pontos</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rankedLaps.map((lap, index) => (
-                    <tr
-                      key={index}
-                      className="border-b border-racing-black hover:bg-racing-black hover:bg-opacity-30 transition-colors"
-                    >
-                      <td className="py-3 px-4">
-                        <span className={`flex items-center justify-center w-8 h-8 rounded-full bg-racing-black ${getMedalColor(index)}`}>
-                          {index + 1}
-                        </span>
-                      </td>
-
-                      <td className="py-3 px-4 font-semibold">{lap.name}</td>
-
-                      <td className="py-3 px-4 text-right font-bold">
-                        {formatTime(lap.time)}
-                      </td>
-
-                      <td className="py-3 px-4 text-right text-fe-green font-semibold hidden sm:table-cell">
-                        {lap.difference.toFixed(2)} kg
-                      </td>
-
-                      <td className="py-3 px-4 text-right text-yellow-400 font-bold">
-                        {lap.points ?? 0} pts
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="flex bg-black/40 p-1 rounded-lg border border-gray-700">
+              <button 
+                onClick={() => setChartType('line')}
+                className={`px-3 py-1 rounded text-sm transition-colors ${chartType === 'line' ? 'bg-f1-red text-white' : 'text-gray-400 hover:text-white'}`}
+              >Linha</button>
+              <button 
+                onClick={() => setChartType('bar')}
+                className={`px-3 py-1 rounded text-sm transition-colors ${chartType === 'bar' ? 'bg-f1-red text-white' : 'text-gray-400 hover:text-white'}`}
+              >Barra</button>
+              <button 
+                onClick={() => setChartType('area')}
+                className={`px-3 py-1 rounded text-sm transition-colors ${chartType === 'area' ? 'bg-f1-red text-white' : 'text-gray-400 hover:text-white'}`}
+              >Área</button>
             </div>
           </div>
 
-          <div className="racing-card card-fe">
-            <h2 className="text-xl font-bold mb-4">Análise de Tempos</h2>
-
-            <div className="flex gap-2 mb-4">
-              <button onClick={() => setChartType('line')} className={`racing-btn-dark ${chartType === 'line' ? 'bg-fe-green' : ''}`}>Linha</button>
-              <button onClick={() => setChartType('bar')} className={`racing-btn-dark ${chartType === 'bar' ? 'bg-fe-green' : ''}`}>Barra</button>
-              <button onClick={() => setChartType('area')} className={`racing-btn-dark ${chartType === 'area' ? 'bg-fe-green' : ''}`}>Área</button>
-            </div>
-
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                {chartType === 'line' && (
-                  <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                    <XAxis dataKey="name" stroke="#fff" />
-                    <YAxis stroke="#fff" />
-                    <Tooltip contentStyle={{ backgroundColor: '#2c2c2c', border: 'none' }} labelStyle={{ color: '#fff' }} />
-                    <Legend />
-                    <Line type="monotone" dataKey="tempo" name="Tempo (s)" stroke="#00a9e1" strokeWidth={2} />
-                  </LineChart>
-                )}
-                {chartType === 'bar' && (
-                  <BarChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                    <XAxis dataKey="name" stroke="#fff" />
-                    <YAxis stroke="#fff" />
-                    <Tooltip contentStyle={{ backgroundColor: '#2c2c2c', border: 'none' }} labelStyle={{ color: '#fff' }} />
-                    <Legend />
-                    <Bar dataKey="tempo" name="Tempo (s)" fill="#00a9e1" />
-                  </BarChart>
-                )}
-                {chartType === 'area' && (
-                  <AreaChart data={chartData}>
-                    <defs>
-                      <linearGradient id="colorTempo" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#00a9e1" stopOpacity={0.8} />
-                        <stop offset="95%" stopColor="#00a9e1" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                    <XAxis dataKey="name" stroke="#fff" />
-                    <YAxis stroke="#fff" />
-                    <Tooltip contentStyle={{ backgroundColor: '#2c2c2c', border: 'none' }} labelStyle={{ color: '#fff' }} />
-                    <Legend />
-                    <Area type="monotone" dataKey="tempo" name="Tempo (s)" stroke="#00a9e1" fillOpacity={1} fill="url(#colorTempo)" />
-                  </AreaChart>
-                )}
-              </ResponsiveContainer>
-            </div>
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              {chartType === 'line' ? (
+                <LineChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <XAxis dataKey="name" stroke="#9ca3af" />
+                  <YAxis stroke="#9ca3af" />
+                  <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#fff' }} />
+                  <Legend />
+                  <Line type="monotone" dataKey="tempo" stroke="#e10600" strokeWidth={3} dot={{ r: 6 }} activeDot={{ r: 8 }} name="Tempo (s)" />
+                </LineChart>
+              ) : chartType === 'bar' ? (
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <XAxis dataKey="name" stroke="#9ca3af" />
+                  <YAxis stroke="#9ca3af" />
+                  <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#fff' }} />
+                  <Legend />
+                  <Bar dataKey="tempo" fill="#e10600" radius={[4, 4, 0, 0]} name="Tempo (s)" />
+                </BarChart>
+              ) : (
+                <AreaChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <XAxis dataKey="name" stroke="#9ca3af" />
+                  <YAxis stroke="#9ca3af" />
+                  <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#fff' }} />
+                  <Legend />
+                  <Area type="monotone" dataKey="tempo" stroke="#e10600" fill="#e10600" fillOpacity={0.3} name="Tempo (s)" />
+                </AreaChart>
+              )}
+            </ResponsiveContainer>
           </div>
-
-          <div className="racing-card card-fe">
-            <div className="flex flex-col sm:flex-row gap-4 sm:gap-8">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-racing-black flex items-center justify-center">
-                  <Users size={24} className="text-fe-green" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-400">Total de Pilotos</p>
-                  <p className="text-2xl font-bold">
-                    {new Set(rankedLaps.map(lap => lap.email)).size}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-racing-black flex items-center justify-center">
-                  <Clock size={24} className="text-fe-green" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-400">Voltas Completadas</p>
-                  <p className="text-2xl font-bold">
-                    {rankedLaps.length}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-racing-black flex items-center justify-center">
-                  <Medal size={24} className="text-yellow-400" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-400">Pontos Totais</p>
-                  <p className="text-2xl font-bold text-yellow-400">
-                    {totalPoints}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4 p-3 bg-fe-green bg-opacity-10 rounded-lg border border-fe-green border-opacity-30">
-              <span className="text-sm">{getEnvironmentalImpact(rankedLaps.length)}</span>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="racing-card card-f1 text-center">
-          <Clock className="mx-auto text-f1-red mb-4" size={48} />
-          <h2 className="text-xl font-bold mb-2">Nenhuma volta registrada</h2>
-          <p>Complete voltas para aparecer no ranking!</p>
         </div>
       )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* RANKING GLOBAL DE PONTOS ACUMULADOS */}
+        <div className="racing-card card-fe overflow-hidden p-0 border-l-4 border-fe-green bg-racing-gray rounded-xl">
+          <div className="p-4 border-b border-gray-800 bg-black/20 flex items-center gap-2">
+            <Trophy className="text-yellow-400" size={20} />
+            <h2 className="text-xl font-bold text-white">Ranking de Pontuação</h2>
+          </div>
+          <div className="max-h-[400px] overflow-y-auto">
+            <table className="w-full text-left">
+              <thead className="bg-black/40 text-gray-400 text-xs uppercase">
+                <tr>
+                  <th className="p-4 font-semibold">Pos</th>
+                  <th className="p-4 font-semibold">Piloto</th>
+                  <th className="p-4 text-right font-semibold">Pontos</th>
+                </tr>
+              </thead>
+              <tbody>
+                {globalUsers.length > 0 ? globalUsers.map((user, index) => (
+                  <tr key={user.email} className="border-b border-gray-800 hover:bg-white/5 transition-colors">
+                    <td className="p-4 font-bold text-white">{index + 1}º</td>
+                    <td className="p-4 text-gray-300">{user.name}</td>
+                    <td className="p-4 text-right font-bold text-yellow-400">{user.points || 0} pts</td>
+                  </tr>
+                )) : (
+                   <tr><td colSpan={3} className="p-10 text-center text-gray-500 italic">Aguardando primeiros pilotos...</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* RANKING DE MELHORES TEMPOS */}
+        <div className="racing-card card-f1 overflow-hidden p-0 border-l-4 border-f1-red bg-racing-gray rounded-xl">
+          <div className="p-4 border-b border-gray-800 bg-black/20 flex items-center gap-2">
+            <Clock className="text-f1-red" size={20} />
+            <h2 className="text-xl font-bold text-white">Recordes de Pista</h2>
+          </div>
+          <div className="max-h-[400px] overflow-y-auto">
+            <table className="w-full text-left">
+              <thead className="bg-black/40 text-gray-400 text-xs uppercase">
+                <tr>
+                  <th className="p-4 font-semibold">Pos</th>
+                  <th className="p-4 font-semibold">Piloto</th>
+                  <th className="p-4 text-right font-semibold">Tempo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rankedLaps.length > 0 ? rankedLaps.map((lap, index) => (
+                  <tr key={index} className="border-b border-gray-800 hover:bg-white/5 transition-colors">
+                    <td className={`p-4 font-bold ${getMedalColor(index)}`}>
+                      {index < 3 && <Medal className="inline mr-1" size={16} />}
+                      {index + 1}º
+                    </td>
+                    <td className="p-4 text-gray-300">{lap.name}</td>
+                    <td className="p-4 text-right font-mono font-bold text-f1-red">{formatTime(lap.time)}</td>
+                  </tr>
+                )) : (
+                  <tr><td colSpan={3} className="p-10 text-center text-gray-500 italic">Nenhum recorde registrado.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* RODAPÉ COM RESUMO */}
+      <div className="mt-10 p-6 bg-racing-gray rounded-xl border border-gray-700 flex flex-col md:flex-row justify-between items-center gap-6 shadow-2xl">
+        <div className="flex items-center gap-4">
+           <div className="p-3 bg-f1-red/20 rounded-full text-f1-red shadow-inner">
+             <UsersIcon size={32} /> 
+           </div>
+           <div>
+             <p className="text-gray-400 text-sm uppercase tracking-tighter">Comunidade Ford Simulator</p>
+             <p className="text-2xl font-bold text-white">{globalUsers.length} Pilotos Registrados</p>
+           </div>
+        </div>
+        <button 
+          onClick={() => navigate('/race')} 
+          className="racing-btn-red bg-f1-red hover:bg-red-700 text-white font-bold py-3 px-8 rounded-full transition-all transform hover:scale-105 shadow-lg shadow-red-900/40"
+        >
+          Acelerar Novamente
+        </button>
+      </div>
     </div>
   );
 };

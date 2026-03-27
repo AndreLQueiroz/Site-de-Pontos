@@ -1,161 +1,104 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LapRecord } from '../types';
+// ADICIONEI Droplets AQUI NO IMPORT
 import { ArrowLeft, TrendingUp, RotateCcw, Zap, Droplets } from 'lucide-react';
 import { formatTime } from '../utils/calculations';
-import { getRankedLaps } from '../utils/storage';
+import { getRankedLaps, addPointsToUser } from '../utils/storage';
 
 const EmissionResults: React.FC = () => {
   const [lapData, setLapData] = useState<LapRecord | null>(null);
-  const [completedLaps, setCompletedLaps] = useState<number>(0);
+  const [totalCompleted, setTotalCompleted] = useState<number>(0);
   const navigate = useNavigate();
 
   const earnedPoints = 3;
 
   useEffect(() => {
-    // Get current lap from sessionStorage
     const lapDataString = sessionStorage.getItem('currentLap');
     if (!lapDataString) {
       navigate('/lap');
       return;
     }
 
-    const lapData = JSON.parse(lapDataString);
-    setLapData(lapData);
+    const data: LapRecord = JSON.parse(lapDataString);
+    setLapData(data);
 
-    // Count completed laps
-    const rankedLaps = getRankedLaps();
-    setCompletedLaps(rankedLaps.length);
+    if (data.completed && data.email) {
+      addPointsToUser(data.email, earnedPoints);
+    }
+
+    const allLaps = getRankedLaps();
+    setTotalCompleted(allLaps.length);
   }, [navigate]);
 
-  const handleNewLap = () => {
-    navigate('/lap');
-  };
-
-  const viewRanking = () => {
-    navigate('/ranking');
-  };
-
+  const handleNewLap = () => navigate('/lap');
+  const viewRanking = () => navigate('/ranking');
   const startNewSession = () => {
-    // Clear session data but keep localStorage
     sessionStorage.removeItem('currentLap');
     navigate('/');
   };
 
-  if (!lapData) {
-    return <div className="text-center">Carregando...</div>;
-  }
+  if (!lapData) return <div className="text-center p-10 text-white">Carregando...</div>;
 
   return (
-    <div className="max-w-md mx-auto">
-      <h1 className="text-3xl font-bold mb-6 text-center text-shadow">Resultados</h1>
+    <div className="max-w-2xl mx-auto">
+      <div className="text-center mb-8">
+        <h1 className="text-4xl font-bold mb-2">Resultado da Corrida</h1>
+      </div>
 
       {lapData.completed ? (
         <div className="space-y-6">
-          <div className="racing-card card-f1">
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <Zap className="text-f1-red" size={20} />
-              <span>Resultados da sua volta</span>
-            </h2>
-
-            <div className="bg-racing-black bg-opacity-50 p-4 rounded-lg mb-4">
-              <div className="flex justify-between items-center mb-2">
-                <span>Tempo:</span>
-                <span className="text-xl font-bold">{formatTime(lapData.time)}</span>
+          <div className="racing-card card-f1 bg-gradient-to-br from-racing-gray to-gray-800">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <p className="text-sm text-gray-400 uppercase">Tempo da Volta</p>
+                <p className="text-3xl font-mono font-bold text-white">{formatTime(lapData.time)}</p>
               </div>
-              <div className="flex justify-between items-center">
-                <span>Status:</span>
-                <span className="text-fe-green font-bold">Completada</span>
+              <div className="bg-yellow-500 text-black px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 animate-bounce">
+                <Zap size={14} fill="currentColor" />
+                +{earnedPoints} PONTOS
               </div>
             </div>
 
-            <div className="space-y-3">
-              <div className="p-3 rounded-lg bg-f1-red bg-opacity-20 border border-f1-red">
-                <div className="flex justify-between">
-                  <span>Emissão Carro Ford:</span>
-                  <span className="font-bold">{lapData.emissionF1.toFixed(2)} kg CO₂</span>
-                </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-4 rounded-lg bg-black/30 border border-f1-red/30 text-center">
+                <p className="text-xs text-f1-red font-bold uppercase">Ford Racing</p>
+                <p className="text-2xl font-bold">{lapData.emissionF1}L</p>
               </div>
-
-              <div className="p-3 rounded-lg bg-fe-green bg-opacity-20 border border-fe-green">
-                <div className="flex justify-between">
-                  <span>Emissão Carro Chevrolet:</span>
-                  <span className="font-bold">{lapData.emissionFE.toFixed(2)} kg CO₂</span>
-                </div>
-              </div>
-
-              <div className="p-3 rounded-lg bg-racing-gray">
-                <div className="flex justify-between">
-                  <span>Diferença:</span>
-                  <span className="font-bold text-fe-green">{lapData.difference.toFixed(2)} kg CO₂</span>
-                </div>
+              <div className="p-4 rounded-lg bg-black/30 border border-gray-600 text-center">
+                <p className="text-xs text-gray-400 font-bold uppercase">Chevrolet</p>
+                <p className="text-2xl font-bold">{lapData.emissionFE}L</p>
               </div>
             </div>
-          </div>
 
-          <div className="racing-card card-fe">
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <Zap className="text-fe-green" size={20} />
-              <span>Recompensa da Corrida</span>
-            </h2>
-
-            <p className="mb-4">
-              Você completou a corrida em
-              <span className="font-bold"> {formatTime(lapData.time)}</span>.
-            </p>
-
-            <p className="text-fe-green font-bold text-lg">
-              +{earnedPoints} pontos adicionados com sucesso!
-            </p>
-
-            <div className="mt-4 p-3 bg-fe-green bg-opacity-10 rounded-lg border border-fe-green border-opacity-30">
-              <span className="text-sm">
-                Continue completando corridas para acumular pontos e trocar por recompensas na loja.
-              </span>
-            </div>
-
-            {completedLaps > 0 && (
-              <div className="mt-3 text-sm text-gray-300">
-                Corridas concluídas até agora: <span className="font-bold text-white">{completedLaps}</span>
+            <div className="mt-6 p-4 rounded-lg bg-green-500/10 border border-green-500/50 flex items-center gap-4">
+              <div className="bg-green-500 p-2 rounded-full text-black">
+                <Droplets size={24} />
               </div>
-            )}
+              <div className="text-left">
+                <p className="font-bold text-green-400 font-mono">Economia: {lapData.difference}L</p>
+                <p className="text-xs text-gray-400">Total de voltas: {totalCompleted}</p>
+              </div>
+            </div>
           </div>
         </div>
       ) : (
-        <div className="racing-card card-f1">
-          <h2 className="text-xl font-bold mb-4">Volta não completada</h2>
-          <p className="mb-4">
-            Como a corrida não foi concluída, nenhum ponto foi adicionado nesta tentativa.
-          </p>
-          <div className="flex justify-center">
-            <Droplets className="text-blue-400" size={48} />
-          </div>
+        <div className="racing-card card-f1 text-center py-10">
+          <Droplets className="mx-auto mb-4 text-blue-400" size={48} />
+          <h2 className="text-xl font-bold mb-4 text-f1-red">Corrida Incompleta</h2>
+          <p className="text-gray-400">Voltas não finalizadas não somam pontos.</p>
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <button
-          onClick={handleNewLap}
-          className="racing-btn-dark flex items-center justify-center gap-2"
-        >
-          <ArrowLeft size={18} />
-          <span>Nova Volta</span>
+      <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <button onClick={handleNewLap} className="racing-btn-dark flex items-center justify-center gap-2">
+          <ArrowLeft size={18} /> Nova Volta
         </button>
-
-        <button
-          onClick={viewRanking}
-          className="racing-btn-green flex items-center justify-center gap-2"
-        >
-          <TrendingUp size={18} />
-          <span>Ranking</span>
+        <button onClick={viewRanking} className="racing-btn-green flex items-center justify-center gap-2">
+          <TrendingUp size={18} /> Ranking
         </button>
-
-        <button
-          onClick={startNewSession}
-          className="racing-btn-red flex items-center justify-center gap-2"
-        >
-          <RotateCcw size={18} />
-          <span>Nova Sessão</span>
+        <button onClick={startNewSession} className="racing-btn-red flex items-center justify-center gap-2">
+          <RotateCcw size={18} /> Sair
         </button>
       </div>
     </div>

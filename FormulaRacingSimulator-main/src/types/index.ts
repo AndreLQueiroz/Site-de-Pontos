@@ -1,6 +1,8 @@
 export interface User {
   name: string;
   email: string;
+  id?: string; // Adicionei id opcional
+  points: number;
 }
 
 export interface LapRecord {

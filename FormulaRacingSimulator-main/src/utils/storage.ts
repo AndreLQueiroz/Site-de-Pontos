@@ -6,9 +6,12 @@ const STORAGE_KEY = 'racingData';
 const loadFromStorage = (): RacingData => {
   try {
     const storedData = localStorage.getItem(STORAGE_KEY);
-    return storedData ? JSON.parse(storedData) : { users: [], laps: [] };
+    if (storedData) {
+      return JSON.parse(storedData);
+    }
+    return { users: [], laps: [] };
   } catch (error) {
-    console.error('Error loading data:', error);
+    console.error('Erro ao carregar dados:', error);
     return { users: [], laps: [] };
   }
 };
@@ -18,38 +21,86 @@ const saveToStorage = (data: RacingData): void => {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch (error) {
-    console.error('Error saving data:', error);
+    console.error('Erro ao salvar dados:', error);
   }
 };
 
 let racingData: RacingData = loadFromStorage();
 
-// Get data from storage
+// Retorna todos os dados
 export const getData = (): RacingData => {
   return racingData;
 };
 
-// Save data to storage
+// Sobrescreve e salva os dados
 export const saveData = (data: RacingData): void => {
   racingData = data;
   saveToStorage(data);
 };
 
-// Save a new user
-export const saveUser = (user: User): void => {
+/**
+ * LÓGICA DE USUÁRIO (LOGIN/CADASTRO)
+ */
+
+// Salva um novo usuário ou retorna um existente (mecanismo de conta)
+export const saveOrUpdateUser = (userData: { name: string, email: string }): User => {
   const data = getData();
-  data.users.push(user);
-  saveData(data);
+  
+  // Tenta encontrar o usuário pelo email
+  const existingUser = data.users.find(u => u.email === userData.email);
+
+  if (existingUser) {
+    // Se já existe, garante que ele tem o campo points e retorna
+    if (existingUser.points === undefined) existingUser.points = 0;
+    return existingUser;
+  } else {
+    // Se não existe, cria um novo com 0 pontos
+    const newUser: User = {
+      name: userData.name,
+      email: userData.email,
+      points: 0
+    };
+    data.users.push(newUser);
+    saveData(data);
+    return newUser;
+  }
 };
 
-// Save a new lap record
+// Adiciona pontos a um usuário específico
+export const addPointsToUser = (email: string, pointsToAdd: number): void => {
+  const data = getData();
+  const userIndex = data.users.findIndex(u => u.email === email);
+
+  if (userIndex !== -1) {
+    // Incrementa os pontos no array global
+    const currentPoints = data.users[userIndex].points || 0;
+    data.users[userIndex].points = currentPoints + pointsToAdd;
+    saveData(data);
+    
+    // IMPORTANTE: Atualiza o sessionStorage para que o site reflita os pontos na hora
+    const currentUserStr = sessionStorage.getItem('currentUser');
+    if (currentUserStr) {
+      const currentUser = JSON.parse(currentUserStr);
+      if (currentUser.email === email) {
+        currentUser.points = data.users[userIndex].points;
+        sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+      }
+    }
+  }
+};
+
+/**
+ * LÓGICA DE CORRIDAS (LAP RECORDS)
+ */
+
+// Salva um novo registro de volta
 export const saveLap = (lap: LapRecord): void => {
   const data = getData();
   data.laps.push(lap);
   saveData(data);
 };
 
-// Get ranked lap times (only completed laps, sorted by time)
+// Retorna o ranking de tempos (apenas voltas completadas, do menor tempo para o maior)
 export const getRankedLaps = (): LapRecord[] => {
   const data = getData();
   return data.laps
@@ -57,7 +108,13 @@ export const getRankedLaps = (): LapRecord[] => {
     .sort((a, b) => a.time - b.time);
 };
 
-// Generate a simple user ID
+// Retorna o ranking de pontos (usuários que mais acumularam pontos)
+export const getGlobalRanking = (): User[] => {
+  const data = getData();
+  return [...data.users].sort((a, b) => (b.points || 0) - (a.points || 0));
+};
+
+// Gera um ID único simples (caso ainda precise)
 export const generateUserId = (): string => {
-  return Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
+  return Math.random().toString(36).substring(2, 9);
 };
